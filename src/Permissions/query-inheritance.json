@@ -1,0 +1,23 @@
+{
+    "contributionIds": ["ms.vss-admin-web.security-view-update-data-provider"],
+    "dataProviderContext": {
+        "properties": {
+            "changeInheritance": true,
+            "permissionSetId": "71356614-aad7-4757-8f2c-0fb3bff6f680",
+            "permissionSetToken": "%%%FOLDER_ID%%%",
+            "inheritPermissions": false,
+            "sourcePage": {
+                "url": "%%%ORG%%%/%%%PROJECT%%%/_queries/all/",
+                "routeId": "ms.vss-work-web.query-route",
+                "routeValues": {
+                    "project": "%%%PROJECT%%%",
+                    "view": "all",
+                    "id": "",
+                    "controller": "Apps",
+                    "action": "ContributedHub",
+                    "serviceHost": ""
+                }
+            }
+        }
+    }
+}
