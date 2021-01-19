@@ -1,5 +1,5 @@
 .\sync-dsc-file.ps1 -org https://dev.azure.com/ptbcp -dscFile .\Config\AzDevOps-DIT.xlsx -tokenFile .\Config\pat.key -upnFilter employeeId   -Verbose -Log -full
-.\sync-dsc-file.ps1 -org https://dev.azure.com/ptbcp -dscFile .\Config\AzDevOps-DIT.xlsx -tokenFile .\Condig\pat.key -upnFilter mailNickname -Verbose -Log -full
+.\sync-dsc-file.ps1 -org https://dev.azure.com/ptbcp -dscFile .\Config\AzDevOps-DIT.xlsx -tokenFile .\Config\pat.key -upnFilter mailNickname -Verbose -Log -full
 
 
 .\generate-iterations.ps1 -org https://dev.azure.com/ptbcp -project "IT.DIT" -prefix "\DIT" -year 2020 -Log -oneweek
