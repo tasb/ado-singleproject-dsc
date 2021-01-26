@@ -26,6 +26,21 @@ function createRepo {
     return $newRepo.remoteUrl
 }
 
+function getDefaultBranch {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$project,
+        [Parameter(Mandatory=$true)][string]$name
+    )
+
+
+    Write-Verbose "[getDefaultBranch] Getting default branch from repo $name on project $project..." 
+    $branch = az repos show --repository $name --org $org --project $project --query "defaultBranch"
+    Write-Verbose "[getDefaultBranch] Getting default branch from repo $name on project $project...Done!"
+
+    return $branch
+}
+
 function validateRepoName {
     param (
         [Parameter(Mandatory=$true)][string]$name
@@ -98,12 +113,13 @@ function initRepoPolicies{
     )
 
     $repoId = existsRepo -org $org -project $project -name $name
+    $defaultBranch = getDefaultBranch -org $org -project $project -name $name
 
-    $dummy = az repos policy approver-count create --allow-downvotes false --blocking true --branch master --creator-vote-counts false --enabled true --reset-on-source-push true --minimum-approver-count 2 --repository-id $repoId  --org $org --project $project
+    $dummy = az repos policy approver-count create --allow-downvotes false --blocking true --branch $defaultBranch --creator-vote-counts false --enabled true --reset-on-source-push true --minimum-approver-count 2 --repository-id $repoId  --org $org --project $project
 
-    $dummy = az repos policy work-item-linking create --blocking true --branch master --enabled true --repository-id $repoId  --org $org --project $project
+    $dummy = az repos policy work-item-linking create --blocking true --branch $defaultBranch --enabled true --repository-id $repoId  --org $org --project $project
 
-    $dummy = az repos policy comment-required create --blocking true --branch master --enabled true --repository-id $repoId  --org $org --project $project
+    $dummy = az repos policy comment-required create --blocking true --branch $defaultBranch --enabled true --repository-id $repoId  --org $org --project $project
 
-    $dummy = az repos policy merge-strategy create --blocking true --branch master --enabled true --allow-no-fast-forward true --allow-squash true --allow-rebase false --allow-rebase-merge false --repository-id $repoId  --org $org --project $project
+    $dummy = az repos policy merge-strategy create --blocking true --branch $defaultBranch --enabled true --allow-no-fast-forward true --allow-squash true --allow-rebase false --allow-rebase-merge false --repository-id $repoId  --org $org --project $project
 }

@@ -396,7 +396,7 @@ function grantPermissionOnPipelineFolder {
     $token = "$projectId/$folder"
     $groupDescriptor = getSecurityGroupDescriptor -org $org -project $project -name $group
 
-    $ret = az devops security permission update --only-show-errors --allow-bit 16111 --id $namespaceId --token $token --subject $groupDescriptor
+    $ret = az devops security permission update --only-show-errors --allow-bit 1665 --id $namespaceId --token $token --subject $groupDescriptor
 
     Write-Verbose "[grantPermissionOnPipelineFolder] Grant permission to $group on pipeline folder $folder. Done!"
 }
@@ -456,7 +456,7 @@ function grantPermissionOnReleaseFolder {
     $token = "$projectId/$folder"
     $groupDescriptor = getSecurityGroupDescriptor -org $org -project $project -name $group
 
-    $ret = az devops security permission update --only-show-errors --allow-bit 3583 --id $namespaceId --token $token --subject $groupDescriptor
+    $ret = az devops security permission update --only-show-errors --allow-bit 2145 --id $namespaceId --token $token --subject $groupDescriptor
 
     Write-Verbose "[grantPermissionOnReleaseFolder] Grant permission to $group on pipeline folder $folder. Done!"
 }
