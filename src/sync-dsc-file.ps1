@@ -9,7 +9,8 @@ param(
     [Parameter(Mandatory=$false)][switch]$usersTeams,
     [Parameter(Mandatory=$false)][switch]$repos,
     [Parameter(Mandatory=$false)][switch]$witfields,
-    [Parameter(Mandatory=$false)][switch]$log
+    [Parameter(Mandatory=$false)][switch]$log,
+    [Parameter(Mandatory=$false)][switch]$fullSync
 )
 
 . (Join-Path $PSScriptRoot .\Org\manage-org.ps1)
@@ -89,6 +90,14 @@ function publishWiki() {
     }
 }
 
+function isRecordToUpdate() {
+    param ( 
+        [Parameter(Mandatory=$true)][object]$toCheck
+    )
+
+    return ($fullSync.IsPresent -or ($toCheck.Update -eq "YES"))
+}
+
 #
 # Start Transcript
 #
@@ -162,11 +171,14 @@ Write-Host "Logged in successfully!"
 #
 # Perform login on Azure
 #
+
 if (!($upnFilter -eq "NULL")) {
     Write-Host "Login on Azure to get users UPN..."
     az login --allow-no-subscriptions
     Write-Host "Login on Azure to get users UPN... Login done!"
 }
+
+
 
 #
 # Manage Projects
@@ -183,6 +195,12 @@ if (($full.IsPresent) -or ($projects.isPresent)) {
         if (!$project.Name) {
             continue;
         }
+
+        if (!(isRecordToUpdate -toCheck $project)) {
+            Write-Verbose "Project $($project.name) set not to be updated"
+            continue;
+        }
+
         $message = "=========  Start Working on Project: $($project.Name)  ========="
         Write-Host $("=" * $message.length)
         Write-Host $message
@@ -292,6 +310,12 @@ if (($full.IsPresent) -or ($teams.isPresent)) {
         if (!$team.Name) {
             continue;
         }
+
+        if (!(isRecordToUpdate -toCheck $team)) {
+            Write-Verbose "Team $($team.name) set not to be updated"
+            continue;
+        }
+
         $message = "=========  Start Working on Team: $($team.Name)  ========="
         Write-Host $("=" * $message.length)
         Write-Host $message
@@ -421,6 +445,12 @@ if (($full.IsPresent) -or ($usersTeams.isPresent)) {
         if (!$userTeams.User) {
             continue;
         }
+
+        if (!(isRecordToUpdate -toCheck $userTeams)) {
+            Write-Verbose "User $($userTeams.User) set not to be updated"
+            continue;
+        }
+
         $message = "=========  Start Working on User: $($userTeams.User)  ========="
         Write-Host $("=" * $message.length)
         Write-Host $message
@@ -459,6 +489,12 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
         if (!$repo.Name) {
             continue;
         }
+
+        if (!(isRecordToUpdate -toCheck $repo)) {
+            Write-Verbose "Repo $($repo.Name) set not to be updated"
+            continue;
+        }
+
         $repoName = $repo.Name
         $message = "=========  Start Working on Repo: $($repoName)  ========="
         Write-Host $("=" * $message.length)
@@ -531,6 +567,7 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
     } 
 }
 
+<#
 #
 # Create Work Item Fields
 #
@@ -557,7 +594,7 @@ if ($witfields.isPresent) {
     }
     Write-Host "Fields done!"
 }
-
+#>
 #
 # Stop Transcript
 #
