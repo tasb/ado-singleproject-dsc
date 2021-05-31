@@ -50,7 +50,8 @@ function createField {
 
     # Check if field already exists
     Write-Verbose "[$($funcName)] Check if field '$name' already exists..."
-    $fieldObject = existsField -org $org -name $Name -personalToken $personalToken
+    # $fieldObject = existsField -org $org -name $Name -personalToken $personalToken
+    $fieldObject = $null
 
     if (!$fieldObject) { # Field doesn't exist let's create it
         Write-Host "[$($funcName)] Field '$Name' not found. Starting to create it..."
@@ -77,8 +78,8 @@ function createField {
         $Body.Add("isQueryable","true")
         $Body.Add("url",$null)
 
-        #$va,$vb = $Type.split('(',2)
-        $va,$vb = $Type.split(' ').trim("(").trim(")")
+        #$va,$vb = $type.split('(',2)
+        $va,$vb = $type.split(' ').trim("(").trim(")")
 
         if ($va.trim() -eq 'Picklist' ) # Picklist (string) or Picklist (integer)
         {
@@ -125,11 +126,121 @@ function createField {
             Throw $RestError
         }
         Write-Host "[$($funcName)] Created field with name '$name'. Reference Name -> '$($RestResponse.referenceName)'"
+        return $RestResponse.referenceName
     }
     else{
         Write-Host "[$($funcName)] Field '$name' already exists..."
+        return $fieldObject.referenceName
     }
-    return $RestResponse.referenceName
+}
+
+function associateField {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$referenceName,
+        [Parameter(Mandatory=$true)][bool]$required,
+        [Parameter(Mandatory=$true)][string]$type,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Associating field with reference name '$referenceName' to wit '$witName'..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = @{}
+    $header.Add("content-type", "application/json")
+
+    Write-Verbose "[$($funcName)] Initialize authentication context"
+    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
+    $header.Add("authorization", "Basic $token")
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields?api-version=6.1-preview.2
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/fields?api-version=6.1-preview.2"
+    Write-Host $requestUrl
+
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("referenceName",$referenceName)
+    $Body.Add("required", $required)
+    $Body.Add("defaultValue", "")
+    $Body.Add("readOnly", $false)
+    $Body.Add("allowGroups", $null)
+    $Body.Add("allowedValues", $null)
+    
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Post -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Associated field with reference name '$referenceName' to wit '$witName'. Name -> '$($RestResponse.name)'"
+    
+    return $RestResponse.name
+}
+
+function setFieldInGroup {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$groupId,
+        [Parameter(Mandatory=$true)][string]$referenceName,
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Setting field with reference name '$referenceName' on wit '$witName' to group '$groupId'..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = @{}
+    $header.Add("content-type", "application/json")
+
+    Write-Verbose "[$($funcName)] Initialize authentication context"
+    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
+    $header.Add("authorization", "Basic $token")
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #PUT https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/groups/{groupId}/controls/{controlId}?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/groups/$($groupId)/controls/$($referenceName)?api-version=6.1-preview.1"
+    Write-Host $requestUrl
+
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("id",$referenceName)
+    $Body.Add("label",$fieldName)
+    $Body.Add("contribution", $null)
+    $Body.Add("controlType", $null)
+    $Body.Add("height", $null)
+    $Body.Add("inherited", $null)
+    $Body.Add("isContribution", $false)
+    $Body.Add("metadata", $null)
+    $Body.Add("order", $null)
+    $Body.Add("overridden", $null)
+    $Body.Add("readOnly", $false)
+    $Body.Add("visible", $true)
+    $Body.Add("watermark", $null)
+
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Put -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Set field with reference name '$referenceName' on wit '$witName' to group '$groupId'."
 }
 
 function updateField {
