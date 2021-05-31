@@ -17,8 +17,8 @@ function existsField {
     $header.Add("authorization", "Basic $token")
     
     Write-Verbose "[$($funcName)] Initialize request Url"
-    #GET https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
-    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0-preview.2"
+    #GET https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
+    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0"
 
     $oldEAP = $ErrorActionPreference
     $ErrorActionPreference = 'SilentlyContinue'
@@ -64,8 +64,8 @@ function createField {
         $header.Add("authorization", "Basic $token")
         
         Write-Verbose "[$($funcName)] Initialize request Url"
-        #POST https://dev.azure.com/{organization}/_apis/wit/fields?api-version=6.0-preview.2
-        $requestUrl = "$($org)/_apis/wit/fields?api-version=6.0-preview.2"
+        #POST https://dev.azure.com/{organization}/_apis/wit/fields?api-version=6.0
+        $requestUrl = "$($org)/_apis/wit/fields?api-version=6.0"
         
         Write-Verbose "[$($funcName)] Body Construction"
         $Body = @{}
@@ -77,11 +77,13 @@ function createField {
         $Body.Add("isQueryable","true")
         $Body.Add("url",$null)
 
-        $va,$vb = $Type.split('(',2)
+        #$va,$vb = $Type.split('(',2)
+        $va,$vb = $Type.split(' ').trim("(").trim(")")
 
         if ($va.trim() -eq 'Picklist' ) # Picklist (string) or Picklist (integer)
         {
-            $Body.Add("type",$vb.split(')',2)[0])
+#            $Body.Add("type",$vb.split(')',2)[0])
+            $Body.Add("type",$vb)
             $Body.Add("isPicklist","true")
             $Body.Add("isPicklistSuggested","false")
         }
@@ -152,8 +154,10 @@ function updateField {
     $header.Add("authorization", "Basic $token")
     
     Write-Verbose "[$($funcName)] Initialize request Url"
-    # PATCH https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
-    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0-preview.2"
+    #PATCH https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
+#    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0-preview.2"
+    #PATCH https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
+    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0"
     
     Write-Verbose "[$($funcName)] Body Update"
 
@@ -202,7 +206,9 @@ function deleteField {
         
         Write-Verbose "[$($funcName)] Initialize request Url"
         #DELETE https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
-        $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0-preview.2"
+#        $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0-preview.2"
+        #DELETE https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
+        $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0"
 
         $oldEAP = $ErrorActionPreference
         $ErrorActionPreference = 'SilentlyContinue'

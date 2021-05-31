@@ -195,6 +195,11 @@ function setPermissionOnRepoForTeam {
     $token = "repoV2/$projectId/$repoId"
     $groupDescriptor = getSecurityGroupDescriptor -org $org -project $project -name $team
 
+    if (!$groupDescriptor) {
+        Write-Verbose "No team found with name $team"
+        return $false
+    }
+
     if ($groupDescriptor) {
         $bitMask = 16386 #reader permissions
         if ($contributor) {

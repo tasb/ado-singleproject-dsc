@@ -94,7 +94,6 @@ function isRecordToUpdate() {
     param ( 
         [Parameter(Mandatory=$true)][object]$toCheck
     )
-
     return ($fullSync.IsPresent -or ($toCheck.Update -eq "YES"))
 }
 
@@ -171,14 +170,11 @@ Write-Host "Logged in successfully!"
 #
 # Perform login on Azure
 #
-
 if (!($upnFilter -eq "NULL")) {
     Write-Host "Login on Azure to get users UPN..."
     az login --allow-no-subscriptions
     Write-Host "Login on Azure to get users UPN... Login done!"
 }
-
-
 
 #
 # Manage Projects
@@ -192,12 +188,11 @@ if (($full.IsPresent) -or ($projects.isPresent)) {
     $___projectCache___ = @{}
     Write-Host "Getting 'Projects' data..."
     foreach ($project in $projectList) {
-        if (!$project.Name) {
+        if (!$project.Name) { # Empty line
             continue;
         }
-
         if (!(isRecordToUpdate -toCheck $project)) {
-            Write-Verbose "Project $($project.name) set not to be updated"
+            Write-Verbose "Project $($project.name) set to not be updated"
             continue;
         }
 
@@ -307,12 +302,11 @@ if (($full.IsPresent) -or ($teams.isPresent)) {
     Write-Host "Getting 'Teams' from data..."
     $teamsList = Import-Excel $dscFile -Sheet "Teams"
     foreach ($team in $teamsList) {
-        if (!$team.Name) {
+        if (!$team.Name) { # Empty line
             continue;
         }
-
         if (!(isRecordToUpdate -toCheck $team)) {
-            Write-Verbose "Team $($team.name) set not to be updated"
+            Write-Verbose "Team $($team.name) set to not be updated"
             continue;
         }
 
@@ -442,12 +436,11 @@ if (($full.IsPresent) -or ($usersTeams.isPresent)) {
     Write-Host "Getting relationship between 'Users' and 'Teams' from data..."
     $usersTeamsList = Import-Excel $dscFile -Sheet "UsersTeams"
     foreach ($userTeams in $usersTeamsList) {
-        if (!$userTeams.User) {
+        if (!$userTeams.User) { # Empty line
             continue;
         }
-
         if (!(isRecordToUpdate -toCheck $userTeams)) {
-            Write-Verbose "User $($userTeams.User) set not to be updated"
+            Write-Verbose "User $($userTeams.User) set to not be updated"
             continue;
         }
 
@@ -486,12 +479,11 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
     Write-Host "Getting 'Repos' from data..."
     $reposList = Import-Excel $dscFile -Sheet "Repos"
     foreach ($repo in $reposList) {
-        if (!$repo.Name) {
+        if (!$repo.Name) { # Empty line
             continue;
         }
-
         if (!(isRecordToUpdate -toCheck $repo)) {
-            Write-Verbose "Repo $($repo.Name) set not to be updated"
+            Write-Verbose "Repo $($repo.Name) set to not be updated"
             continue;
         }
 
@@ -504,8 +496,8 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
         if ($repo.Wiki -eq "Yes") {
             $repoName = $repo.Name + ".Wiki"
         }
-        $validName = validateRepoName -name $repoName
 
+        $validName = validateRepoName -name $repoName
         if ($validName) {
             if ($repo.Wiki -eq "Yes") {
                 $teamAdminList = $repo.TeamOwnerAdmin -Split ";"
@@ -521,6 +513,7 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
                     initializeRepoFromZip -repoURL $repoURL -name $repoName
                     Write-Verbose "Initialize repo with base structure... Done!"
                 }
+                if ($repo.ApplySecurity -eq "Yes") {
                     Write-Verbose "Set team $($repo.TeamOwner) as owner on repo $($repoName)..."
                     setPermissionOnRepoForTeam -org $org -project $repo.Project -repo $repoName -team $repo.TeamOwner -contributor $true
                     Write-Verbose "Set team $($repo.TeamOwner) as owner on repo $($repoName)... Done!"
@@ -537,28 +530,39 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
                     if ($repo.TeamType -eq "Produto") {
                         initRepoPolicies -org $org -project $repo.Project -name $repoName
                     }
-#                }
+                }
             }
 
             $contributors = $repo.OtherContributors -Split ";"
-
             if ($contributors) {
             foreach ($contributorTeam in $contributors) {
                 $contributorTeam = $contributorTeam.Trim()
                     Write-Verbose "Set team $($contributorTeam) as contributor on repo $($repoName)..."
-                    setPermissionOnRepoForTeam -org $org -project $repo.Project -repo $repoName -team $contributorTeam -contributor $true
-                    Write-Verbose "Set team $($contributorTeam) as contributor on repo $($repoName)... Done!"
+                    $ret = setPermissionOnRepoForTeam -org $org -project $repo.Project -repo $repoName -team $contributorTeam -contributor $true
+                    
+                    if (!$ret) {
+                        Write-Verbose "No team $($contributorTeam) found. Trying to add user $($contributorTeam) as contributor on repo $($repoName)..."
+                        setPermissionOnRepoForUser -org $org -project $repo.Project -repo $repoName -user $userUPN -contributor $true
+                        Write-Verbose "Set user $($contributorTeam) as contributor on repo $($repoName)... Done!"
+                    } else {
+                        Write-Verbose "Set team $($contributorTeam) as contributor on repo $($repoName)... Done!"
+                    }
                 }
             }
 
             $readers = $repo.OtherReaders -Split ";"
-
             if ($readers) {
-            foreach ($readerTeam in $readers) {
-                $readerTeam = $readerTeam.Trim()
+                foreach ($readerTeam in $readers) {
+                    $readerTeam = $readerTeam.Trim()
                     Write-Verbose "Set team $($readerTeam) as reader on repo $($repoName)..."
                     setPermissionOnRepoForTeam -org $org -project $repo.Project -repo $repoName -team $readerTeam -contributor $false
-                    Write-Verbose "Set team $($readerTeam) as reader on repo $($repoName)... Done!"
+                    if (!$ret) {
+                        Write-Verbose "No team $($contributorTeam) found. Trying to add user $($contributorTeam) as reader on repo $($repoName)..."
+                        setPermissionOnRepoForUser -org $org -project $repo.Project -repo $repoName -user $userUPN -contributor $false
+                        Write-Verbose "Set user $($contributorTeam) as reader on repo $($repoName)... Done!"
+                    } else {
+                        Write-Verbose "Set team $($contributorTeam) as reader on repo $($repoName)... Done!"
+                    }
                 }
             }
         } else {
@@ -567,7 +571,6 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
     } 
 }
 
-<#
 #
 # Create Work Item Fields
 #
@@ -594,7 +597,7 @@ if ($witfields.isPresent) {
     }
     Write-Host "Fields done!"
 }
-#>
+
 #
 # Stop Transcript
 #

@@ -7,19 +7,19 @@ function transformPathToJMESPath {
     if ($path -eq '\') {
         $jmesPath = "identifier"
     } else {
-        $nodes = $path -split '\\'
-        foreach ($node in $nodes) {   
-            if ($node) {
-                if ($jmesPath) {
-                    $jmesPath = $jmesPath + ".children[] | "
-                } else {
-                    $jmesPath = "children[] | "
-                }
-    
-                $jmesPath = $jmesPath + "[?name=='$node']"
-            }  
-        }
-        $jmesPath = $jmesPath + ".identifier | [0]"
+    $nodes = $path -split '\\'
+    foreach ($node in $nodes) {   
+        if ($node) {
+            if ($jmesPath) {
+                $jmesPath = $jmesPath + ".children[] | "
+            } else {
+                $jmesPath = "children[] | "
+            }
+
+            $jmesPath = $jmesPath + "[?name=='$node']"
+        }  
+    }
+    $jmesPath = $jmesPath + ".identifier | [0]"
     }
     Write-Verbose "transformPathToJMESPath: $path -> $jmesPath"
     return $jmesPath
