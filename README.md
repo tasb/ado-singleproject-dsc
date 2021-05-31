@@ -1,6 +1,7 @@
 # Description 
 Manage creation of new objects on Azure DevOps using a Excel as DSC (Desired State Configuration) file
 
+
 # How to use
 ```powershell
 ./sync-dsc-file.ps1 -org (default = https://dev.azure.com/ptbcp)
