@@ -129,6 +129,9 @@ function createField {
     }
     else{
         Write-Host "[$($funcName)] Field '$name' already exists..."
+        if($fieldObject.type -ne $type){
+            Throw "Type mismatch: existing field is '$($fieldObject.type)'"
+        }
         return $fieldObject.referenceName
     }
 }
