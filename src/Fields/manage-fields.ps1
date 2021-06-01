@@ -1,3 +1,39 @@
+function generateHeader{
+    param (
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+    $header = @{}
+    $header.Add("content-type", "application/json")
+    Write-Verbose "[$($funcName)] Initialize authentication context"
+    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
+    $header.Add("authorization", "Basic $token")
+    return $header
+}
+
+function getControlDefinition {
+    param (
+        [Parameter(Mandatory=$true)][string]$referenceName,
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][bool]$readOnly,
+        [Parameter(Mandatory=$true)][bool]$visible
+    )
+    $control = @{}
+    $control.Add("id",$referenceName)
+    $control.Add("label",$fieldName)
+    $control.Add("contribution", $null)
+    $control.Add("controlType", $null)
+    $control.Add("height", $null)
+    $control.Add("inherited", $null)
+    $control.Add("isContribution", $false)
+    $control.Add("metadata", $null)
+    $control.Add("order", $null)
+    $control.Add("overridden", $null)
+    $control.Add("readOnly", $readOnly)
+    $control.Add("visible", $visible)
+    $control.Add("watermark", $null)
+    return $control
+}
+
 function existsField {
     param (
         [Parameter(Mandatory=$true)][string]$org,
@@ -9,12 +45,7 @@ function existsField {
     Write-Verbose "[$($funcName)] Get field '$name' Reference Name"
 
     Write-Verbose "[$($funcName)] Headers Construction"
-    $header = @{}
-    $header.Add("content-type", "application/json")
-
-    Write-Verbose "[$($funcName)] Initialize authentication context"
-    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-    $header.Add("authorization", "Basic $token")
+    $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
     #GET https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
@@ -36,13 +67,128 @@ function existsField {
     return $RestResponse
 }
 
+function existsList {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Get list '$name' Reference Name"
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #GET https://dev.azure.com/{organization}/_apis/work/processes/lists?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/lists?api-version=6.1-preview.1"
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    $listId = $null
+    foreach ($val in $RestResponse.value) {
+        if($val.name -eq $name){
+            $listId = $val.id
+            break
+        }
+    }
+    if(!$listId){
+        Write-Verbose "[$($funcName)]  List '$name' doesn't exist"
+        return $null
+    }
+    #GET https://dev.azure.com/{organization}/_apis/work/processes/lists/{listId}?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/lists/$($listId)?api-version=6.1-preview.1"
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Verbose "[$($funcName)] Got list '$name'"
+    return $RestResponse
+}
+
+function createList {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$type,
+        [Parameter(Mandatory=$true)][object[]]$values,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    if(($type -ne 'picklistDouble') -and $type -ne ('picklistInteger') -and $type -ne ('picklistString')){
+        Throw 'Invalid type for picklist'
+    }
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Creating list with name '$name' ..."
+
+    # Check if list already exists
+    Write-Verbose "[$($funcName)] Check if list '$name' already exists..."
+    $list = existsList -org $org -name $Name -personalToken $personalToken
+    
+    $listType = $type.Replace('picklist', '')
+    if (!$list) { # Field doesn't exist let's create it
+        Write-Host "[$($funcName)] List '$Name' not found. Starting to create it..."
+
+        Write-Verbose "[$($funcName)] Headers Construction"
+        $header = generateHeader $personalToken
+        
+        Write-Verbose "[$($funcName)] Initialize request Url"
+        #POST https://dev.azure.com/{organization}/_apis/work/processes/lists?api-version=6.1-preview.1
+        $requestUrl = "$($org)/_apis/work/processes/lists?api-version=6.1-preview.1"
+        
+        Write-Verbose "[$($funcName)] Body Construction"
+        $Body = @{}
+        $Body.Add("id",$null)
+        $Body.Add("url",$null)
+        $Body.Add("name",$name)
+        $Body.Add("type",$listType)
+        $Body.Add("isSuggested",$false)
+        $Body.Add("items",$values)
+
+        # Convert Body Object to JSON
+        $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+
+        $oldEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'SilentlyContinue'
+        $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Post -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+        $ErrorActionPreference = $oldEAP
+        if ($RestError)
+        {
+            Throw $RestError
+        }
+        Write-Host "[$($funcName)] Created List with name '$name'. Id -> '$($RestResponse.Id)'"
+        return $RestResponse
+    }
+    else{
+        Write-Host "[$($funcName)] List '$name' already exists..."
+        if($list.type -ne $listType){
+            Throw "Type mismatch: existing list is '$($list.type)'"
+        }
+        return $list
+    }
+}
+
 function createField {
     param (
         [Parameter(Mandatory=$true)][string]$org,
         [Parameter(Mandatory=$true)][string]$name,
         [Parameter(Mandatory=$true)][string]$description,
         [Parameter(Mandatory=$true)][string]$type,
-        [Parameter(Mandatory=$true)][string]$personalToken
+        [Parameter(Mandatory=$true)][string]$personalToken,
+        [Parameter(Mandatory=$false)][object[]]$listValues
     )
 
     $funcName = (Get-PSCallStack)[0].Command
@@ -56,12 +202,7 @@ function createField {
         Write-Host "[$($funcName)] Field '$Name' not found. Starting to create it..."
 
         Write-Verbose "[$($funcName)] Headers Construction"
-        $header = @{}
-        $header.Add("content-type", "application/json")
-
-        Write-Verbose "[$($funcName)] Initialize authentication context"
-        $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-        $header.Add("authorization", "Basic $token")
+        $header = generateHeader $personalToken
         
         Write-Verbose "[$($funcName)] Initialize request Url"
         #POST https://dev.azure.com/{organization}/_apis/wit/fields?api-version=6.0
@@ -72,22 +213,23 @@ function createField {
         $Body.Add("name",$name)
         $Body.Add("description","(BCP) " + $description)
         $Body.Add("usage","workItem")
-        $Body.Add("readOnly","false")
-        $Body.Add("canSortBy","true")
-        $Body.Add("isQueryable","true")
+        $Body.Add("readOnly",$false)
+        $Body.Add("canSortBy",$true)
+        $Body.Add("isQueryable",$true)
         $Body.Add("url",$null)
 
-        #$va,$vb = $type.split('(',2)
-        $va,$vb = $type.split(' ').trim("(").trim(")")
-
-        if ($va.trim() -eq 'Picklist' ) # Picklist (string) or Picklist (integer)
+        if ($type.StartsWith("picklist")) # Picklist (string) or Picklist (integer)
         {
-#            $Body.Add("type",$vb.split(')',2)[0])
-            $Body.Add("type",$vb)
-            $Body.Add("isPicklist","true")
-            $Body.Add("isPicklistSuggested","false")
+            $list = createList $org $name $type $listValues $personalToken
+            $Body.Add("isPicklist",$true)
+            $Body.Add("isPicklistSuggested",$false)
+            $Body.Add("picklistId",$list.id)
+            $Body.Add("type",$type.Replace("picklist",""))
         }
         else {
+            if($type -eq "identity"){
+                $Body.Add("isIdentity",$true)
+            }
             $Body.Add("type",$type)
         }
 
@@ -130,7 +272,9 @@ function createField {
     else{
         Write-Host "[$($funcName)] Field '$name' already exists..."
         if($fieldObject.type -ne $type){
-            Throw "Type mismatch: existing field is '$($fieldObject.type)'"
+            if(!$type.StartsWith("picklist") -or $fieldObject.Type -ne $type.Replace("picklist", "")){
+                Throw "Type mismatch: existing field is '$($fieldObject.type)'"
+            }
         }
         return $fieldObject.referenceName
     }
@@ -151,12 +295,7 @@ function associateField {
     Write-Verbose "[$($funcName)] Associating field with reference name '$referenceName' to wit '$witName'..."
 
     Write-Verbose "[$($funcName)] Headers Construction"
-    $header = @{}
-    $header.Add("content-type", "application/json")
-
-    Write-Verbose "[$($funcName)] Initialize authentication context"
-    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-    $header.Add("authorization", "Basic $token")
+    $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
     #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields?api-version=6.1-preview.2
@@ -187,30 +326,6 @@ function associateField {
     return $RestResponse.name
 }
 
-function getControlDefinition {
-    param (
-        [Parameter(Mandatory=$true)][string]$referenceName,
-        [Parameter(Mandatory=$true)][string]$fieldName,
-        [Parameter(Mandatory=$true)][bool]$readOnly,
-        [Parameter(Mandatory=$true)][bool]$visible
-    )
-    $control = @{}
-    $control.Add("id",$referenceName)
-    $control.Add("label",$fieldName)
-    $control.Add("contribution", $null)
-    $control.Add("controlType", $null)
-    $control.Add("height", $null)
-    $control.Add("inherited", $null)
-    $control.Add("isContribution", $false)
-    $control.Add("metadata", $null)
-    $control.Add("order", $null)
-    $control.Add("overridden", $null)
-    $control.Add("readOnly", $readOnly)
-    $control.Add("visible", $visible)
-    $control.Add("watermark", $null)
-    return $control
-}
-
 function setFieldInGroup {
     param (
         [Parameter(Mandatory=$true)][string]$org,
@@ -226,17 +341,11 @@ function setFieldInGroup {
     Write-Verbose "[$($funcName)] Setting field with reference name '$referenceName' on wit '$witName' to group '$groupId'..."
 
     Write-Verbose "[$($funcName)] Headers Construction"
-    $header = @{}
-    $header.Add("content-type", "application/json")
-
-    Write-Verbose "[$($funcName)] Initialize authentication context"
-    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-    $header.Add("authorization", "Basic $token")
+    $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
     #PUT https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/groups/{groupId}/controls/{controlId}?api-version=6.1-preview.1
     $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/groups/$($groupId)/controls/$($referenceName)?api-version=6.1-preview.1"
-    Write-Host $requestUrl
 
     Write-Verbose "[$($funcName)] Body Construction"
     $Body = getControlDefinition $referenceName $fieldName $false $true
@@ -271,12 +380,7 @@ function setHtmlInGroup {
     Write-Verbose "[$($funcName)] Setting field with reference name '$referenceName' on wit '$witName' to section '$sectionId'..."
 
     Write-Verbose "[$($funcName)] Headers Construction"
-    $header = @{}
-    $header.Add("content-type", "application/json")
-
-    Write-Verbose "[$($funcName)] Initialize authentication context"
-    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-    $header.Add("authorization", "Basic $token")
+    $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
     #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/pages/{pageId}/sections/{sectionId}/groups/{groupId}?api-version=6.1-preview.1
@@ -327,12 +431,7 @@ function updateField {
     Write-Verbose "[$($funcName)] Updating field with name '$name' ..."
 
     Write-Verbose "[$($funcName)] Headers Construction"
-    $header = @{}
-    $header.Add("content-type", "application/json")
-
-    Write-Verbose "[$($funcName)] Initialize authentication context"
-    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-    $header.Add("authorization", "Basic $token")
+    $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
     #PATCH https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
@@ -378,12 +477,7 @@ function deleteField {
 
     if ($fieldObject) { # Field exists let's delete it
         Write-Verbose "[$($funcName)] Headers Construction"
-        $header = @{}
-        $header.Add("content-type", "application/json")
-
-        Write-Verbose "[$($funcName)] Initialize authentication context"
-        $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
-        $header.Add("authorization", "Basic $token")
+        $header = generateHeader $personalToken
         
         Write-Verbose "[$($funcName)] Initialize request Url"
         #DELETE https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
