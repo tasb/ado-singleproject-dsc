@@ -3,3 +3,7 @@
 
 
 .\generate-iterations.ps1 -org https://dev.azure.com/ptbcp -project "IT.DIT" -prefix "\DIT" -year 2020 -Log -oneweek
+
+
+
+.\sync-dsc-file.ps1 -org https://dev.azure.com/tiberna -dscFile .\Config\AzDevOps-DIT.xlsx -tokenFile .\Config\pat.key -upnFilter $null -Verbose -Log -witFields -processToUpdate "MyAgile"

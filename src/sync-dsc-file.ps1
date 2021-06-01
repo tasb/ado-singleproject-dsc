@@ -1,8 +1,9 @@
 param(
-    [Parameter(Mandatory=$true )][string]$org="https://dev.azure.com/ptbcp",
+    [Parameter(Mandatory=$true )][string]$org="https://dev.azure.com/tiberna",
     [Parameter(Mandatory=$true )][string]$dscFile="AzDevOps-DIT.xlsx",
     [Parameter(Mandatory=$true )][string]$tokenFile,
-    [Parameter(Mandatory=$false)][string]$upnFilter="employeeId",
+    [Parameter(Mandatory=$false)][string]$upnFilter,
+    [Parameter(Mandatory=$false)][string]$processToUpdate="MyAgile",
     [Parameter(Mandatory=$false)][switch]$full,
     [Parameter(Mandatory=$false)][switch]$projects,
     [Parameter(Mandatory=$false)][switch]$teams,
@@ -27,6 +28,7 @@ param(
 . (Join-Path $PSScriptRoot .\Pipelines\manage-pipelines.ps1)
 . (Join-Path $PSScriptRoot .\Identity\identity-mgmt.ps1)
 . (Join-Path $PSScriptRoot .\Fields\manage-fields.ps1)
+. (Join-Path $PSScriptRoot .\Fields\manage-dependencies.ps1)
 
 
 function quit() {
@@ -37,7 +39,7 @@ function quit() {
         logout -org $org
     }
 
-    if (!($upnFilter -eq "NULL")) {
+    if ($upnFilter) {
         az logout
     }
 
@@ -170,7 +172,7 @@ Write-Host "Logged in successfully!"
 #
 # Perform login on Azure
 #
-if (!($upnFilter -eq "NULL")) {
+if ($upnFilter) {
     Write-Host "Login on Azure to get users UPN..."
     az login --allow-no-subscriptions
     Write-Host "Login on Azure to get users UPN... Login done!"
@@ -575,6 +577,28 @@ if (($full.IsPresent) -or ($repos.isPresent)) {
 # Create Work Item Fields
 #
 if ($witfields.isPresent) {
+
+    $CONST_CREATE_FIELD = "C"
+    $CONST_UPDATE_FIELD = "U"
+    $CONST_DELETE_FIELD = "D"
+    $CONST_REQUIRED_FIELD = "Y"
+    $CONST_MULTILINE_FIELD = "html"
+
+    if (!$processToUpdate) {
+        printError -message "processToUpdate argument is mandatory when witFields is set"
+        quit
+    }
+
+    #
+    # Getting process Id. If not find, this code will not proceed
+    #
+    $processId = existProcess -org $org.trim() -processName $processToUpdate -personalToken $personalToken;
+
+    if (!$processId) {
+        printError -message "$processToUpdate doesn't exists on Organization $org"
+        quit
+    }
+
     #
     # Getting Fields data from Excel and perform the creation/update operations
     #
@@ -587,10 +611,60 @@ if ($witfields.isPresent) {
             Write-Host $message
             Write-Host $("=" * $message.length)
     
-            switch ($field.Action) {
-                "C"  {$fieldObject = createField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken; break}
-                "U"  {$fieldObject = updateField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken -fieldObject $fieldObject; break}
-                "D"  {$fieldObject = deleteField -org $org.trim() -name ($field.Name).trim() -personalToken $personalToken; break}
+            switch ($field.Action.ToUpper()) {
+                $CONST_CREATE_FIELD  {
+                    $fieldObject = createField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken;
+                    $requiredField = $field.Required.ToUpper() -eq $CONST_REQUIRED_FIELD;
+
+                    $scope = $field.Scope -Split ";"
+
+                    foreach ($witName in $scope) {
+                        associateField -org $org.trim() -processId $processId -witName $witName -referenceName $fieldObject -required $requiredField -type ($field.Type).trim() -personalToken $personalToken;
+                        $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName "$processToUpdate.$witName" -personalToken $personalToken;
+                        
+                        # Get page details
+                        $page = $pageLayout[($field.Page)];
+
+                        if (!$page) {
+                            createPage -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -name ($field.Page) -personalToken $personalToken
+                            $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName "$processToUpdate.$witName" -personalToken $personalToken -force $true
+                            $page = $pageLayout[($field.Page)]
+                        }
+                        $pageId = $pageLayout[($field.Page)].id;
+
+                        if ($field.Type.ToLower() -eq $CONST_MULTILINE_FIELD) {
+                            if ($page.sections.Contains($field.Group)) {
+                                setHtmlInGroup -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -pageId $pageId -sectionId $sectionId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                            } else {
+                                printError -message "$($field.Group) doesn't exists on page $($field.Page)"
+                                continue;
+                            }
+                        } else {
+                            # Get group details
+                            $group = $pageLayout[($field.Page)].groups[($field.Group)]
+
+                            IF (!$group) {
+                                createGroup -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -pageId $pageId -name $field.Group -personalToken $personalToken
+                                $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName "$processToUpdate.$witName" -personalToken $personalToken -force $true
+                                $group = $pageLayout[($field.Page)].groups[($field.Group)]
+
+                            }
+
+                            $groupId = $pageLayout[($field.Page)].groups[($field.Group)].groupId
+                            $sectionId = $pageLayout[($field.Page)].groups[($field.Group)].sectionId
+
+                            setFieldInGroup -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -groupId $groupId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                        }
+                    }
+
+                    break;
+                }
+                $CONST_UPDATE_FIELD  {
+                    $fieldObject = updateField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken -fieldObject $fieldObject; break
+                }
+                $CONST_DELETE_FIELD  {
+                    $fieldObject = deleteField -org $org.trim() -name ($field.Name).trim() -personalToken $personalToken; break
+                }
                 default {"Do Nothing !"; break}
             }
         }
@@ -598,7 +672,6 @@ if ($witfields.isPresent) {
     Write-Host "Fields done!"
 }
 
-#
 # Stop Transcript
 #
 if($log.isPresent) {
