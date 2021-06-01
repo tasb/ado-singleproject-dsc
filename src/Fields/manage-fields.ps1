@@ -431,6 +431,42 @@ function associateField {
     return $RestResponse.name
 }
 
+function removeFieldFromWIT {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $fieldObject = existsField -org $org -name $name -personalToken $personalToken
+    if(!$fieldObject){
+        Write-Host "[$($funcName)] Field '$name' doesn't exists..."
+        return
+    }
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Removing field with reference name '$referenceName' from wit '$witName'..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #DELETE https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields/{fieldRefName}?api-version=6.1-preview.2
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/fields/$($fieldObject.referenceName)?api-version=6.1-preview.2"
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    Invoke-RestMethod -Uri $requestUrl -Method Delete -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Removed field with reference name '$name' from wit '$witName'."
+}
+
 function setFieldInGroup {
     param (
         [Parameter(Mandatory=$true)][string]$org,
