@@ -93,6 +93,51 @@ function createPage {
     return $RestResponse
 }
 
+function createGroup {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$pageId,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Creating Group with name '$name' ..."
+
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    $sectionId = "Section1"
+    #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/pages/{pageId}/sections/{sectionId}/groups?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/pages/$($pageId)/sections/$($sectionId)/groups?api-version=6.1-preview.1"
+    
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("id",$null)
+    $Body.Add("inherited",$null)
+    $Body.Add("label",$name)
+    $Body.Add("order",$null)
+    $Body.Add("overridden",$null)
+    $Body.Add("visible",$true)
+    $Body.Add("controls",$null)
+
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Post -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        $requestUrl
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Created Group with name '$name'. Id -> '$($RestResponse.id)'"
+    return $RestResponse
+}
+
 function existsList {
     param (
         [Parameter(Mandatory=$true)][string]$org,
