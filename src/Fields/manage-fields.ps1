@@ -50,9 +50,8 @@ function createField {
 
     # Check if field already exists
     Write-Verbose "[$($funcName)] Check if field '$name' already exists..."
-    # $fieldObject = existsField -org $org -name $Name -personalToken $personalToken
-    $fieldObject = $null
-
+    $fieldObject = existsField -org $org -name $Name -personalToken $personalToken
+    
     if (!$fieldObject) { # Field doesn't exist let's create it
         Write-Host "[$($funcName)] Field '$Name' not found. Starting to create it..."
 
@@ -159,7 +158,6 @@ function associateField {
     Write-Verbose "[$($funcName)] Initialize request Url"
     #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields?api-version=6.1-preview.2
     $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/fields?api-version=6.1-preview.2"
-    Write-Host $requestUrl
 
     Write-Verbose "[$($funcName)] Body Construction"
     $Body = @{}
@@ -184,6 +182,30 @@ function associateField {
     Write-Host "[$($funcName)] Associated field with reference name '$referenceName' to wit '$witName'. Name -> '$($RestResponse.name)'"
     
     return $RestResponse.name
+}
+
+function getControlDefinition {
+    param (
+        [Parameter(Mandatory=$true)][string]$referenceName,
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][bool]$readOnly,
+        [Parameter(Mandatory=$true)][bool]$visible
+    )
+    $control = @{}
+    $control.Add("id",$referenceName)
+    $control.Add("label",$fieldName)
+    $control.Add("contribution", $null)
+    $control.Add("controlType", $null)
+    $control.Add("height", $null)
+    $control.Add("inherited", $null)
+    $control.Add("isContribution", $false)
+    $control.Add("metadata", $null)
+    $control.Add("order", $null)
+    $control.Add("overridden", $null)
+    $control.Add("readOnly", $readOnly)
+    $control.Add("visible", $visible)
+    $control.Add("watermark", $null)
+    return $control
 }
 
 function setFieldInGroup {
@@ -214,20 +236,7 @@ function setFieldInGroup {
     Write-Host $requestUrl
 
     Write-Verbose "[$($funcName)] Body Construction"
-    $Body = @{}
-    $Body.Add("id",$referenceName)
-    $Body.Add("label",$fieldName)
-    $Body.Add("contribution", $null)
-    $Body.Add("controlType", $null)
-    $Body.Add("height", $null)
-    $Body.Add("inherited", $null)
-    $Body.Add("isContribution", $false)
-    $Body.Add("metadata", $null)
-    $Body.Add("order", $null)
-    $Body.Add("overridden", $null)
-    $Body.Add("readOnly", $false)
-    $Body.Add("visible", $true)
-    $Body.Add("watermark", $null)
+    $Body = getControlDefinition $referenceName $fieldName $false $true
 
     # Convert Body Object to JSON
     $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
@@ -241,6 +250,64 @@ function setFieldInGroup {
         Throw $RestError
     }
     Write-Host "[$($funcName)] Set field with reference name '$referenceName' on wit '$witName' to group '$groupId'."
+}
+
+function setHtmlInGroup {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$pageId,
+        [Parameter(Mandatory=$true)][string]$sectionId,
+        [Parameter(Mandatory=$true)][string]$referenceName,
+        [Parameter(Mandatory=$true)][string]$fieldName,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Setting field with reference name '$referenceName' on wit '$witName' to section '$sectionId'..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = @{}
+    $header.Add("content-type", "application/json")
+
+    Write-Verbose "[$($funcName)] Initialize authentication context"
+    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
+    $header.Add("authorization", "Basic $token")
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/pages/{pageId}/sections/{sectionId}/groups/{groupId}?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/pages/$($pageId)/sections/$($sectionId)/Groups?api-version=6.1-preview.1"
+    
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("id",$null)
+    $Body.Add("label",$fieldName)
+    $Body.Add("contribution", $null)
+    $Body.Add("height", $null)
+    $Body.Add("inherited", $null)
+    $Body.Add("isContribution", $false)
+    $Body.Add("order", $null)
+    $Body.Add("overridden", $null)
+    $Body.Add("visible", $true)
+    
+    $Control = getControlDefinition $referenceName $fieldName $false $true
+    $Controls = @($Control)
+
+    $Body.Add("controls", $Controls)
+
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    Invoke-RestMethod -Uri $requestUrl -Method POST -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Set field with reference name '$referenceName' on wit '$witName' to section '$sectionId'."
 }
 
 function updateField {
