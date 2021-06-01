@@ -34,6 +34,65 @@ function getControlDefinition {
     return $control
 }
 
+function getSection{
+    param (
+        [Parameter(Mandatory=$true)][string]$id
+    )
+    $section = @{}
+    $section.Add("id", $id)
+    $section.Add("groups", @())
+    $section.Add("overridden", $false)
+    return $section
+}
+
+function createPage {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Creating Page with name '$name' ..."
+
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/pages?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/pages?api-version=6.1-preview.1"
+    
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("id",$null)
+    $Body.Add("inherited",$null)
+    $Body.Add("label",$name)
+    $Body.Add("locked",$false)
+    $Body.Add("order",$null)
+    $Body.Add("overridden",$null)
+    $Body.Add("contribution",$null)
+    $Body.Add("pageType","custom")
+    $Body.Add("visible",$true)
+    $section1 = getSection "Section1"
+    $section2 = getSection "Section2"
+    $section3 = getSection "Section3"
+    $Body.Add("sections", @($section1, $section2, $section3))
+
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Post -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Created Page with name '$name'. Id -> '$($RestResponse.id)'"
+    return $RestResponse
+}
+
 function existsList {
     param (
         [Parameter(Mandatory=$true)][string]$org,
