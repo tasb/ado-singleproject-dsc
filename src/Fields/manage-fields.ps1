@@ -34,39 +34,6 @@ function getControlDefinition {
     return $control
 }
 
-function existsField {
-    param (
-        [Parameter(Mandatory=$true)][string]$org,
-        [Parameter(Mandatory=$true)][string]$name,
-        [Parameter(Mandatory=$true)][string]$personalToken
-    )
-
-    $funcName = (Get-PSCallStack)[0].Command
-    Write-Verbose "[$($funcName)] Get field '$name' Reference Name"
-
-    Write-Verbose "[$($funcName)] Headers Construction"
-    $header = generateHeader $personalToken
-    
-    Write-Verbose "[$($funcName)] Initialize request Url"
-    #GET https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
-    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0"
-
-    $oldEAP = $ErrorActionPreference
-    $ErrorActionPreference = 'SilentlyContinue'
-    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
-    $ErrorActionPreference = $oldEAP
-    if ($RestError)
-    {
-        if ((($resterror[0].message | ConvertFrom-Json).message).split(':',2)[0] -ne 'TF51535') #TF51535: Cannot find field Batatas.
-        {
-            Throw $RestError
-        }
-        Write-Verbose "[$($funcName)]  Field '$name' doesn't exist"
-    }
-    Write-Verbose "[$($funcName)] Get field '$name' Reference Name -> '$($RestResponse.referenceName)'"
-    return $RestResponse
-}
-
 function existsList {
     param (
         [Parameter(Mandatory=$true)][string]$org,
@@ -179,6 +146,39 @@ function createList {
         }
         return $list
     }
+}
+
+function existsField {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Get field '$name' Reference Name"
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #GET https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
+    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0"
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        if ((($resterror[0].message | ConvertFrom-Json).message).split(':',2)[0] -ne 'TF51535') #TF51535: Cannot find field Batatas.
+        {
+            Throw $RestError
+        }
+        Write-Verbose "[$($funcName)]  Field '$name' doesn't exist"
+    }
+    Write-Verbose "[$($funcName)] Get field '$name' Reference Name -> '$($RestResponse.referenceName)'"
+    return $RestResponse
 }
 
 function createField {
@@ -355,7 +355,7 @@ function setFieldInGroup {
 
     $oldEAP = $ErrorActionPreference
     $ErrorActionPreference = 'SilentlyContinue'
-    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Put -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    Invoke-RestMethod -Uri $requestUrl -Method Put -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
     $ErrorActionPreference = $oldEAP
     if ($RestError)
     {
