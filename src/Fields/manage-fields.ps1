@@ -100,7 +100,8 @@ function createGroup {
         [Parameter(Mandatory=$true)][string]$witName,
         [Parameter(Mandatory=$true)][string]$pageId,
         [Parameter(Mandatory=$true)][string]$name,
-        [Parameter(Mandatory=$true)][string]$personalToken
+        [Parameter(Mandatory=$true)][string]$personalToken,
+        [Parameter(Mandatory=$false)][string]$sectionId = "Section1"
     )
 
     $funcName = (Get-PSCallStack)[0].Command
@@ -109,7 +110,6 @@ function createGroup {
     $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
-    $sectionId = "Section1"
     #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/pages/{pageId}/sections/{sectionId}/groups?api-version=6.1-preview.1
     $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/pages/$($pageId)/sections/$($sectionId)/groups?api-version=6.1-preview.1"
     
@@ -392,7 +392,8 @@ function associateField {
         [Parameter(Mandatory=$true)][string]$referenceName,
         [Parameter(Mandatory=$true)][bool]$required,
         [Parameter(Mandatory=$true)][string]$type,
-        [Parameter(Mandatory=$true)][string]$personalToken
+        [Parameter(Mandatory=$true)][string]$personalToken,
+        [Parameter(Mandatory=$false)][string]$defaultValue = ""
     )
 
     $funcName = (Get-PSCallStack)[0].Command
@@ -409,7 +410,7 @@ function associateField {
     $Body = @{}
     $Body.Add("referenceName",$referenceName)
     $Body.Add("required", $required)
-    $Body.Add("defaultValue", "")
+    $Body.Add("defaultValue", $defaultValue)
     $Body.Add("readOnly", $false)
     $Body.Add("allowGroups", $null)
     $Body.Add("allowedValues", $null)
