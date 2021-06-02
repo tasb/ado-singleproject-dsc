@@ -632,7 +632,7 @@ if ($witfields.isPresent) {
 
                     $scope = $field.Scope -Split $CONST_FIELD_SEPARATOR
                     foreach ($witName in $scope) {
-                        #$witName = $witName -replace "\s*", ""
+                        $witName = $witName.trim()
                         $witRefName = $witRefNames[$witName]
                         
                         associateField -org $org.trim() -processId $processId -witName $witRefName -referenceName $fieldObject -required $requiredField -type ($field.Type).trim() -personalToken $personalToken -defaultValue $defaultValue

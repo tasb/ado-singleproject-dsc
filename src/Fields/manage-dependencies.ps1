@@ -80,8 +80,8 @@ function getWITRefNames {
     $witRefName = @{}
     foreach ($witDetails in $RestResponse.value) {
         $referenceName = $witDetails.referenceName
-        if (!$witDetails.inherits) {
-            createInheritWIT -org $org -processId $processId -baseWit $witDetails -personalToken $personalToken
+        if ($witDetails.customization -eq "system") {
+            $referenceName = createInheritWIT -org $org -processId $processId -baseWit $witDetails -personalToken $personalToken
         }
         $witRefName[$witDetails.name] = $referenceName
     }
