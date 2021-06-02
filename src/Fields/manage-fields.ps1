@@ -406,6 +406,10 @@ function associateField {
     #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields?api-version=6.1-preview.2
     $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/fields?api-version=6.1-preview.2"
 
+    if(($type -eq 'boolean') -and ($defaultValue -ne "true") -and ($defaultValue -ne "false")){
+        $defaultValue = "false"
+    }
+
     Write-Verbose "[$($funcName)] Body Construction"
     $Body = @{}
     $Body.Add("referenceName",$referenceName)
