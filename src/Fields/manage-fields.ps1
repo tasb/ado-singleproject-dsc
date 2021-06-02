@@ -431,7 +431,6 @@ function associateField {
         Throw $RestError
     }
     Write-Host "[$($funcName)] Associated field with reference name '$referenceName' to wit '$witName'. Name -> '$($RestResponse.name)'"
-    
     return $RestResponse.name
 }
 
