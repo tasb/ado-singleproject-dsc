@@ -376,8 +376,10 @@ function createField {
     else{
         Write-Host "[$($funcName)] Field '$name' already exists..."
         if($fieldObject.type -ne $type){
-            if(!$type.StartsWith("picklist") -or $fieldObject.Type -ne $type.Replace("picklist", "")){
-                Throw "Type mismatch: existing field is '$($fieldObject.type)'"
+            if(!$type.StartsWith("picklist") -or $fieldObject.type -ne $type.Replace("picklist", "")){
+                if(!(($type -eq "identity") -and ($fieldObject.type -eq "string") -and ($fieldObject.isIdentity))){
+                    Throw "Type mismatch: existing field is '$($fieldObject.type)'"
+                }
             }
         }
         return $fieldObject.referenceName
