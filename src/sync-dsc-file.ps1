@@ -583,6 +583,8 @@ if ($witfields.isPresent) {
     $CONST_DELETE_FIELD = "D"
     $CONST_REQUIRED_FIELD = "Y"
     $CONST_MULTILINE_FIELD = "html"
+    $CONST_PICKLIST_FIELD = "picklist"
+    $CONST_FIELD_SEPARATOR = ";"
 
     if (!$processToUpdate) {
         printError -message "processToUpdate argument is mandatory when witFields is set"
@@ -599,6 +601,8 @@ if ($witfields.isPresent) {
         quit
     }
 
+    $witRefNames = getWITRefNames -org $org.trim() -processId $processId -personalToken $personalToken
+
     #
     # Getting Fields data from Excel and perform the creation/update operations
     #
@@ -613,28 +617,40 @@ if ($witfields.isPresent) {
     
             switch ($field.Action.ToUpper()) {
                 $CONST_CREATE_FIELD  {
-                    $fieldObject = createField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken;
+                    $fieldValues = $null
+
+                    if ($field.Type.ToLower().StartsWith($CONST_PICKLIST_FIELD)) {
+                        $fieldValues = $field.Values -Split "$CONST_FIELD_SEPARATOR\s*"
+                    }
+
+                    $fieldObject = createField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken -listValues $fieldValues
                     $requiredField = $field.Required.ToUpper() -eq $CONST_REQUIRED_FIELD;
+                    $defaultValue = $field.Default
+                    if ($defaultValue) {
+                        $defaultValue = $defaultValue.trim()
+                    }
 
-                    $scope = $field.Scope -Split ";"
-
+                    $scope = $field.Scope -Split $CONST_FIELD_SEPARATOR
                     foreach ($witName in $scope) {
-                        associateField -org $org.trim() -processId $processId -witName $witName -referenceName $fieldObject -required $requiredField -type ($field.Type).trim() -personalToken $personalToken;
-                        $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName "$processToUpdate.$witName" -personalToken $personalToken;
+                        #$witName = $witName -replace "\s*", ""
+                        $witRefName = $witRefNames[$witName]
+                        
+                        associateField -org $org.trim() -processId $processId -witName $witRefName -referenceName $fieldObject -required $requiredField -type ($field.Type).trim() -personalToken $personalToken -defaultValue $defaultValue
+                        $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName $witRefName -personalToken $personalToken;
                         
                         # Get page details
                         $page = $pageLayout[($field.Page)];
 
                         if (!$page) {
-                            createPage -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -name ($field.Page) -personalToken $personalToken
-                            $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName "$processToUpdate.$witName" -personalToken $personalToken -force $true
+                            createPage -org $org.trim() -processId $processId -witName $witRefName -name ($field.Page) -personalToken $personalToken
+                            $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName $witRefName -personalToken $personalToken -force $true
                             $page = $pageLayout[($field.Page)]
                         }
                         $pageId = $pageLayout[($field.Page)].id;
 
                         if ($field.Type.ToLower() -eq $CONST_MULTILINE_FIELD) {
                             if ($page.sections.Contains($field.Group)) {
-                                setHtmlInGroup -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -pageId $pageId -sectionId $sectionId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                                setHtmlInGroup -org $org.trim() -processId $processId -witName $witRefName -pageId $pageId -sectionId $field.Group -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
                             } else {
                                 printError -message "$($field.Group) doesn't exists on page $($field.Page)"
                                 continue;
@@ -643,17 +659,14 @@ if ($witfields.isPresent) {
                             # Get group details
                             $group = $pageLayout[($field.Page)].groups[($field.Group)]
 
-                            IF (!$group) {
-                                createGroup -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -pageId $pageId -name $field.Group -personalToken $personalToken
-                                $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName "$processToUpdate.$witName" -personalToken $personalToken -force $true
+                            if (!$group) {
+                                createGroup -org $org.trim() -processId $processId -witName $witRefName -pageId $pageId -name $field.Group -personalToken $personalToken
+                                $pageLayout = getPageLayout -org $org.trim() -processId $processId -witRefName $witRefName -personalToken $personalToken -force $true
                                 $group = $pageLayout[($field.Page)].groups[($field.Group)]
-
                             }
 
                             $groupId = $pageLayout[($field.Page)].groups[($field.Group)].groupId
-                            $sectionId = $pageLayout[($field.Page)].groups[($field.Group)].sectionId
-
-                            setFieldInGroup -org $org.trim() -processId $processId -witName "$processToUpdate.$witName" -groupId $groupId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                            setFieldInGroup -org $org.trim() -processId $processId -witName $witRefName -groupId $groupId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
                         }
                     }
 

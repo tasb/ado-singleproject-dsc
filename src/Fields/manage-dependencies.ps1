@@ -31,7 +31,7 @@ function existProcess {
     
     $oldEAP = $ErrorActionPreference
     $ErrorActionPreference = 'SilentlyContinue'
-    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
     $ErrorActionPreference = $oldEAP
     if ($RestError)
     {
@@ -49,6 +49,89 @@ function existProcess {
     Write-Host "[$($funcName)] Get process Id with name '$processName': $processId"
     
     return $processId
+}
+
+function getWITRefNames {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Get WIT Ref Name for process Id '$processId'..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #GET https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workitemtypes?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workitemtypes?api-version=6.1-preview.2"
+    
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+
+    $witRefName = @{}
+    foreach ($witDetails in $RestResponse.value) {
+        $referenceName = $witDetails.referenceName
+        if (!$witDetails.inherits) {
+            createInheritWIT -org $org -processId $processId -baseWit $witDetails -personalToken $personalToken
+        }
+        $witRefName[$witDetails.name] = $referenceName
+    }
+
+    Write-Verbose "[$($funcName)] Get WIT Ref Name for process Id '$processId'... Done!"
+    
+    return $witRefName
+}
+
+function createInheritWIT {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][object]$baseWit,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Create inherit WIT from base WIT Id '$($baseWit.referenceName)'..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #GET https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workitemtypes?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workitemtypes?api-version=6.1-preview.2"
+
+    $Body = @{}
+    $Body.Add("name",$baseWit.name)
+    $Body.Add("color",$baseWit.color)
+    $Body.Add("description",$baseWit.description)
+    $Body.Add("icon",$baseWit.icon)
+    $Body.Add("inheritsFrom",$baseWit.referenceName)
+    $Body.Add("isDisabled",$false)
+
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+    
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Post -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+
+    Write-Verbose "[$($funcName)] Create inherit WIT from base WIT Id '$($baseWit.referenceName)' finished with referenceName $($RestResponse.referenceName)"
+
+    return $RestResponse.referenceName
 }
 
 function getPageLayout {
@@ -75,7 +158,7 @@ function getPageLayout {
         
         $oldEAP = $ErrorActionPreference
         $ErrorActionPreference = 'SilentlyContinue'
-        $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+        $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -ErrorVariable RestError #-ErrorAction SilentlyContinue
         $ErrorActionPreference = $oldEAP
         if ($RestError)
         {
