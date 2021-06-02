@@ -207,11 +207,11 @@ function createList {
 
     # Check if list already exists
     Write-Verbose "[$($funcName)] Check if list '$name' already exists..."
-    $list = existsList -org $org -name $Name -personalToken $personalToken
+    $list = existsList -org $org -name $name -personalToken $personalToken
     
     $listType = $type.Replace('picklist', '')
     if (!$list) { # Field doesn't exist let's create it
-        Write-Host "[$($funcName)] List '$Name' not found. Starting to create it..."
+        Write-Host "[$($funcName)] List '$name' not found. Starting to create it..."
 
         Write-Verbose "[$($funcName)] Headers Construction"
         $header = generateHeader $personalToken
@@ -250,6 +250,56 @@ function createList {
         }
         return $list
     }
+}
+
+function updateList {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][object[]]$values,
+        [Parameter(Mandatory=$true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Updating list with name '$name' ..."
+
+    # Check if list already exists
+    Write-Verbose "[$($funcName)] Check if list '$name' already exists..."
+    $list = existsList -org $org -name $name -personalToken $personalToken
+    
+    if (!$list) {
+        Throw "[$($funcName)] List '$name' not found. Can't update..."
+    }
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #PUT https://dev.azure.com/{organization}/_apis/work/processes/lists/{listId}?api-version=6.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processes/lists/$($list.id)?api-version=6.1-preview.1"
+    
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("id",$list.id)
+    $Body.Add("url",$list.url)
+    $Body.Add("name",$list.name)
+    $Body.Add("type",$list.type)
+    $Body.Add("isSuggested",$list.isSuggested)
+    $Body.Add("items",$values)
+
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method PUT -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Created List with name '$name'. Id -> '$($RestResponse.Id)'"
+    return $RestResponse
 }
 
 function existsField {
@@ -436,6 +486,66 @@ function associateField {
     return $RestResponse.name
 }
 
+function updateWitField {
+    param (
+        [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
+        [Parameter(Mandatory=$true)][string]$witName,
+        [Parameter(Mandatory=$true)][string]$name,
+        [Parameter(Mandatory=$true)][string]$description,
+        [Parameter(Mandatory=$true)][bool]$required,
+        [Parameter(Mandatory=$true)][string]$type,
+        [Parameter(Mandatory=$true)][string]$personalToken,
+        [Parameter(Mandatory=$false)][object[]]$listValues,
+        [Parameter(Mandatory=$false)][string]$defaultValue = ""
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Updating field with name '$name' on wit '$witName'..."
+
+    $referenceName = updateField -org $org -processId $processId -name $name -description $description -type $type -personalToken $personalToken -listValues $listValues
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = generateHeader $personalToken
+    
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #PATCH https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields/{fieldRefName}?api-version=6.1-preview.2
+    #POST https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields?api-version=6.1-preview.2
+    $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/fields?api-version=6.1-preview.2"
+
+    if(($type -eq 'boolean') -and ($defaultValue -ne "true") -and ($defaultValue -ne "false")){
+        $defaultValue = "false"
+    }
+
+    Write-Verbose "[$($funcName)] Body Construction"
+    $Body = @{}
+    $Body.Add("referenceName",$referenceName)
+    $Body.Add("required", $required)
+    $Body.Add("defaultValue", $defaultValue)
+    $Body.Add("readOnly", $false)
+    $Body.Add("allowGroups", $null)
+    
+    if($type.StartsWith("picklist")){
+        $Body.Add("allowedValues", $listValues)
+    } else {
+        $Body.Add("allowedValues", $null)
+    }
+    
+    # Convert Body Object to JSON
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
+
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Post -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError)
+    {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Updated field with reference name '$referenceName' on wit '$witName'."
+    return $RestResponse.referenceName
+}
+
 function removeFieldFromWIT {
     param (
         [Parameter(Mandatory=$true)][string]$org,
@@ -574,34 +684,57 @@ function setHtmlInGroup {
 function updateField {
     param (
         [Parameter(Mandatory=$true)][string]$org,
+        [Parameter(Mandatory=$true)][string]$processId,
         [Parameter(Mandatory=$true)][string]$name,
         [Parameter(Mandatory=$true)][string]$description,
         [Parameter(Mandatory=$true)][string]$type,
-        [Parameter(Mandatory=$true)][psobject]$fieldObject,
-        [Parameter(Mandatory=$true)][string]$personalToken
+        [Parameter(Mandatory=$true)][string]$personalToken,
+        [Parameter(Mandatory=$false)][object[]]$listValues
     )
 
     $funcName = (Get-PSCallStack)[0].Command
     Write-Verbose "[$($funcName)] Updating field with name '$name' ..."
 
+    # Check if field already exists
+    Write-Verbose "[$($funcName)] Check if field '$name' already exists..."
+    $fieldObject = existsField -org $org -name $Name -personalToken $personalToken
+    
+    if (!$fieldObject) {
+        Throw "[$($funcName)] Field '$name' not found. Can't update..."
+    }
+    
+    if(($fieldObject.type -ne $type) -or (($type -eq "string") -and ($fieldObject.isIdentity))){
+        if(!$type.StartsWith("picklist") -or $fieldObject.type -ne $type.Replace("picklist", "")){
+            if(!(($type -eq "identity") -and ($fieldObject.type -eq "string") -and ($fieldObject.isIdentity))){
+                Throw "Type mismatch: existing field is '$($fieldObject.type)' and can't change field type"
+            }
+        }
+    }
+
+    if($type.StartsWith("picklist")){
+        $list = updateList -org $org -name $name -values $listValues -personalToken $personalToken
+    }
+
     Write-Verbose "[$($funcName)] Headers Construction"
     $header = generateHeader $personalToken
     
     Write-Verbose "[$($funcName)] Initialize request Url"
-    #PATCH https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0-preview.2
-#    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0-preview.2"
-    #PATCH https://dev.azure.com/{organization}/_apis/wit/fields/{fieldNameOrRefName}?api-version=6.0
-    $requestUrl = "$($org)/_apis/wit/fields/$($name)?api-version=6.0"
+    #PATCH https://dev.azure.com/{organization}/_apis/work/processdefinitions/{processId}/fields?api-version=4.1-preview.1
+    $requestUrl = "$($org)/_apis/work/processdefinitions/$($processId)/fields?api-version=4.1-preview.1"
     
     Write-Verbose "[$($funcName)] Body Update"
 
-    $fieldObject.name = $name
-    $fieldObject.description = $description
-    $fieldObject.type = $type
-    $fieldObject.Add("isDeleted","false")
+    #$fieldObject.name = $name
+    #$fieldObject.description = $description
+    #$fieldObject.type = $type
+    #$fieldObject.Add("isDeleted","false")
+
+    $Body = @{}
+    $Body.Add("id", $fieldObject.referenceName)
+    $Body.Add("description", $description)
 
     # Convert Body Object to JSON
-    $JSONBody = ConvertTo-Json -InputObject $fieldObject -Depth 100
+    $JSONBody = ConvertTo-Json -InputObject $Body -Depth 100
 
     $oldEAP = $ErrorActionPreference
     $ErrorActionPreference = 'SilentlyContinue'
@@ -612,7 +745,7 @@ function updateField {
         Throw $RestError
     }
     Write-Verbose "[$($funcName)] Updating field with name '($name)' Reference Name -> '$($RestResponse.referenceName)'"
-    return $RestResponse.referenceName
+    return $fieldObject.referenceName
 }
 
 function deleteField {
