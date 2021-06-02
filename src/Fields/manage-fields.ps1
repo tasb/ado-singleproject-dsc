@@ -480,7 +480,8 @@ function setFieldInGroup {
         [Parameter(Mandatory=$true)][string]$groupId,
         [Parameter(Mandatory=$true)][string]$referenceName,
         [Parameter(Mandatory=$true)][string]$fieldName,
-        [Parameter(Mandatory=$true)][string]$personalToken
+        [Parameter(Mandatory=$true)][string]$personalToken,
+        [Parameter(Mandatory=$false)][string]$previousGroupId = $null
     )
 
     $funcName = (Get-PSCallStack)[0].Command
@@ -492,6 +493,13 @@ function setFieldInGroup {
     Write-Verbose "[$($funcName)] Initialize request Url"
     #PUT https://dev.azure.com/{organization}/_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout/groups/{groupId}/controls/{controlId}?api-version=6.1-preview.1
     $requestUrl = "$($org)/_apis/work/processes/$($processId)/workItemTypes/$($witName)/layout/groups/$($groupId)/controls/$($referenceName)?api-version=6.1-preview.1"
+    if($previousGroupId){
+        if($previousGroupId -eq $groupId){
+            Write-Host "[$($funcName)] groupId and previousGroupId are the same for field with reference name '$referenceName' on wit '$witName'."
+            return
+        }
+        $requestUrl += "&removeFromGroupId=$($previousGroupId)"
+    }
 
     Write-Verbose "[$($funcName)] Body Construction"
     $Body = getControlDefinition $referenceName $fieldName $false $true
