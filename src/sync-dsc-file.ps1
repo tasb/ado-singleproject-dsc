@@ -673,10 +673,40 @@ if ($witfields.isPresent) {
                     break;
                 }
                 $CONST_UPDATE_FIELD  {
-                    $fieldObject = updateField -org $org.trim() -name ($field.Name).trim() -description ($field.Description).trim() -type ($field.Type).trim() -personalToken $personalToken -fieldObject $fieldObject; break
+                    $requiredField = $field.Required.ToUpper() -eq $CONST_REQUIRED_FIELD;
+
+                    $fieldValues = $null
+
+                    if ($field.Type.ToLower().StartsWith($CONST_PICKLIST_FIELD)) {
+                        $fieldValues = $field.Values -Split "$CONST_FIELD_SEPARATOR\s*"
+                    }
+
+                    $defaultValue = $field.Default
+                    if ($defaultValue) {
+                        $defaultValue = $defaultValue.trim()
+                    }
+
+                    $scope = $field.Scope -Split $CONST_FIELD_SEPARATOR
+                    foreach ($witName in $scope) {
+                        $witName = $witName.trim()
+                        $witRefName = $witRefNames[$witName]
+                    
+                        updateWitField -org $org -processId $processId -witName $witRefName -name ($field.Name).trim() `
+                            -description ($field.Description).trim() -required $requiredField `
+                            -type ($field.Type).trim() -personalToken $personalToken `
+                            -listValues $fieldValues -defaultValue $defaultValue
+                    }
+                    break
                 }
                 $CONST_DELETE_FIELD  {
-                    $fieldObject = deleteField -org $org.trim() -name ($field.Name).trim() -personalToken $personalToken; break
+                    $scope = $field.Scope -Split $CONST_FIELD_SEPARATOR
+                    foreach ($witName in $scope) {
+                        $witName = $witName.trim()
+                        $witRefName = $witRefNames[$witName]
+                    
+                        removeFieldFromWIT -org $org -processId $processId -witName $witRefName -name ($field.Name).trim() -personalToken $personalToken
+                    }
+                    break
                 }
                 default {"Do Nothing !"; break}
             }
@@ -684,6 +714,7 @@ if ($witfields.isPresent) {
     }
     Write-Host "Fields done!"
 }
+
 
 # Stop Transcript
 #
