@@ -28,6 +28,7 @@ param(
 . (Join-Path $PSScriptRoot .\Pipelines\manage-pipelines.ps1)
 . (Join-Path $PSScriptRoot .\Identity\identity-mgmt.ps1)
 . (Join-Path $PSScriptRoot .\Fields\manage-fields.ps1)
+. (Join-Path $PSScriptRoot .\Rules\manage-rules.ps1)
 . (Join-Path $PSScriptRoot .\Fields\manage-dependencies.ps1)
 
 
@@ -608,6 +609,7 @@ if ($witfields.isPresent) {
     #
     Write-Host "Getting 'Work Item Fields' from data..."
     $fieldsList = Import-Excel $dscFile -Sheet "WitFields"
+    $orgName = $org.split('/', [System.StringSplitOptions]::RemoveEmptyEntries)[-1]
     foreach ($field in $fieldsList) {
         if ($field.Name) {
             $message = "=========  Start Working on Field: $($field.Name)  ========="
@@ -667,6 +669,20 @@ if ($witfields.isPresent) {
 
                             $groupId = $pageLayout[($field.Page)].groups[($field.Group)].groupId
                             setFieldInGroup -org $org.trim() -processId $processId -witName $witRefName -groupId $groupId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                        }
+
+                        $rules = (getRules -org $org.trim() -processId $processId -witRefName $witRefName -personalToken $personalToken).value
+                        # Add rules
+                        $visibilityGroups = $field.Visibility
+                        if(![string]::IsNullOrEmpty($visibilityGroups))
+                        {
+                            $groupIdentityResult = getGroupIdentity -org $orgName -personalToken $personalToken -groupName $visibilityGroups.trim()
+                            $ruleName = generateRuleName -actionType $CONST_RULES_ACTION_TYPE_MAKE_HIDDEN -fieldId $fieldObject -groupId $groupIdentityResult.id
+                            if($rules.Where({ $_.name -eq $ruleName }, 'First').Count -gt 0){
+                                Write-Host "Rule '$ruleName' already exists"
+                            }else{
+                                $rule = createVisibilityRule -org $org.trim() -processId $processId -witRefName $witRefName -fieldId $fieldObject -groupId $groupIdentityResult.id -personalToken $personalToken
+                            }
                         }
                     }
 
