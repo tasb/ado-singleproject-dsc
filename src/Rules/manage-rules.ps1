@@ -1,3 +1,15 @@
+$CONST_RULES_ACTION_TYPE_MAKE_READONLY = "makeReadOnly"
+$CONST_RULES_ACTION_TYPE_MAKE_HIDDEN = "hideTargetField"
+
+function generateRuleName{
+    param (
+        [Parameter(Mandatory = $true)][string]$actionType,
+        [Parameter(Mandatory = $true)][string]$fieldId,
+        [Parameter(Mandatory = $true)][string]$groupId
+    )
+    return "$($actionType)_$($fieldId)_$($groupId)"
+}
+
 function generateHeader {
     param (
         [Parameter(Mandatory = $true)][string]$personalToken
@@ -48,7 +60,7 @@ function createVisibilityRule {
         [Parameter(Mandatory = $true)][string]$groupId,
         [Parameter(Mandatory = $true)][string]$personalToken
     )
-    return createSetRule -org $org -processId $processId -witRefName $witRefName -fieldId $fieldId -groupId $groupId -actionType "hideTargetField" -personalToken $personalToken
+    return createSetRule -org $org -processId $processId -witRefName $witRefName -fieldId $fieldId -groupId $groupId -actionType $CONST_RULES_ACTION_TYPE_MAKE_HIDDEN -personalToken $personalToken
 }
 
 function createEditRule {
@@ -60,7 +72,7 @@ function createEditRule {
         [Parameter(Mandatory = $true)][string]$groupId,
         [Parameter(Mandatory = $true)][string]$personalToken
     )
-    return createSetRule -org $org -processId $processId -witRefName $witRefName -fieldId $fieldId -groupId $groupId -actionType "makeReadOnly" -personalToken $personalToken
+    return createSetRule -org $org -processId $processId -witRefName $witRefName -fieldId $fieldId -groupId $groupId -actionType $CONST_RULES_ACTION_TYPE_READONLY -personalToken $personalToken
 }
 
 function createSetRule {
@@ -74,7 +86,7 @@ function createSetRule {
         [Parameter(Mandatory = $true)][string]$personalToken
     )
     
-    $name = "$($actionType)_$($fieldId)_$($groupId)"
+    $name = generateRuleName -actionType $actionType -fieldId $fieldId -groupId $groupId
     $action = @{}
     $action.Add("actionType", $actionType)
     $action.Add("targetField", $fieldId)
