@@ -28,3 +28,39 @@ function getUPN {
     }
     return $userUPN
 }
+
+function getGroupIdentity {
+    param (
+        [Parameter(Mandatory = $true)][string]$org,
+        [Parameter(Mandatory = $true)][string]$groupName,
+        [Parameter(Mandatory = $true)][string]$personalToken
+    )
+
+    $funcName = (Get-PSCallStack)[0].Command
+    Write-Verbose "[$($funcName)] Searching groups with name '$groupName' ..."
+
+    Write-Verbose "[$($funcName)] Headers Construction"
+    $header = @{}
+    $header.Add("content-type", "application/json")
+    Write-Verbose "[$($funcName)] Initialize authentication context"
+    $token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($personalToken)"))
+    $header.Add("authorization", "Basic $token")
+        
+    Write-Verbose "[$($funcName)] Initialize request Url"
+    #GET https://vssps.dev.azure.com/{organization}/_apis/identities?api-version=6.0
+    $requestUrl = "https://vssps.dev.azure.com/$($org)/_apis/identities?api-version=6.0&searchFilter=LocalGroupName&filterValue=$($groupName)"
+        
+    $oldEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $RestResponse = Invoke-RestMethod -Uri $requestUrl -Method Get -Headers $header -Body $JSONBody -ErrorVariable RestError #-ErrorAction SilentlyContinue
+    $ErrorActionPreference = $oldEAP
+    if ($RestError) {
+        Throw $RestError
+    }
+    Write-Host "[$($funcName)] Searched groups with name '$groupName'."
+    $group = $RestResponse.value[0]
+    if(!$group){
+        throw "Group '$groupName' not found!"
+    }
+    return $group
+}
