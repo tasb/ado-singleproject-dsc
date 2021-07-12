@@ -167,11 +167,13 @@ function getPageLayout {
 
         $pageLayout = @{}
         foreach ($page in $RestResponse.pages) {
+            Write-Verbose $page
             $pageDetails = @{
                 id = $page.id
                 name = $page.label
                 groups = @{}
                 sections = New-Object 'System.Collections.Generic.List[String]'
+                controls = @{}
             }
 
             foreach ($section in $page.sections) {
@@ -184,6 +186,19 @@ function getPageLayout {
                     }
 
                     $pageDetails.groups[$groupDetails.groupName] = $groupDetails
+
+                    foreach ($control in $group.controls) {
+                        if ($control.id) {
+                            $controlDetails = @{
+                                groupId = $group.id
+                                groupName = $group.label
+                                sectionId = $section.id
+                                controlId = $control.id
+                            }
+    
+                            $pageDetails.controls[$control.id] = $controlDetails    
+                        }
+                    }
                 }
             }
 
@@ -191,6 +206,7 @@ function getPageLayout {
         }
 
         $___int_pageLayout___[$witRefName] = $pageLayout
+        Write-Verbose $pageLayout
     }
 
     Write-Verbose "[$($funcName)] Get Page Layout for wit '$witRefName'... Done!"

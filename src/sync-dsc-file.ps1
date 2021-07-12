@@ -652,7 +652,10 @@ if ($witfields.isPresent) {
 
                         if ($field.Type.ToLower() -eq $CONST_MULTILINE_FIELD) {
                             if ($page.sections.Contains($field.Group)) {
-                                setHtmlInGroup -org $org.trim() -processId $processId -witName $witRefName -pageId $pageId -sectionId $field.Group -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                                $existsObject = $page.controls[$fieldObject]
+                                if (!$existsObject -Or ($existsObject.sectionId -ne $field.Group)) {
+                                    setHtmlInGroup -org $org.trim() -processId $processId -witName $witRefName -pageId $pageId -sectionId $field.Group -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                                }
                             } else {
                                 printError -message "$($field.Group) doesn't exists on page $($field.Page)"
                                 continue;
@@ -668,7 +671,10 @@ if ($witfields.isPresent) {
                             }
 
                             $groupId = $pageLayout[($field.Page)].groups[($field.Group)].groupId
-                            setFieldInGroup -org $org.trim() -processId $processId -witName $witRefName -groupId $groupId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                            $existsObject = $page.controls[$fieldObject]
+                            if (!$existsObject -Or ($existsObject.groupId -ne $groupId)) {
+                                setFieldInGroup -org $org.trim() -processId $processId -witName $witRefName -groupId $groupId -referenceName $fieldObject -fieldName ($field.Name).trim() -personalToken $personalToken;
+                            }
                         }
 
                         $rules = (getRules -org $org.trim() -processId $processId -witRefName $witRefName -personalToken $personalToken).value
@@ -678,10 +684,24 @@ if ($witfields.isPresent) {
                         {
                             $groupIdentityResult = getGroupIdentity -org $orgName -personalToken $personalToken -groupName $visibilityGroups.trim()
                             $ruleName = generateRuleName -actionType $CONST_RULES_ACTION_TYPE_MAKE_HIDDEN -fieldId $fieldObject -groupId $groupIdentityResult.id
-                            if($rules.Where({ $_.name -eq $ruleName }, 'First').Count -gt 0){
+                            $ruleId = $rules.Where({ $_.name -eq $ruleName }, 'First').id
+                            if($ruleId){
                                 Write-Host "Rule '$ruleName' already exists"
                             }else{
                                 $rule = createVisibilityRule -org $org.trim() -processId $processId -witRefName $witRefName -fieldId $fieldObject -groupId $groupIdentityResult.id -personalToken $personalToken
+                            }
+                        }
+
+                        $readonlyGroups = $field.ReadOnly
+                        if(![string]::IsNullOrEmpty($readonlyGroups))
+                        {
+                            $groupIdentityResult = getGroupIdentity -org $orgName -personalToken $personalToken -groupName $visibilityGroups.trim()
+                            $ruleName = generateRuleName -actionType $CONST_RULES_ACTION_TYPE_READONLY -fieldId $fieldObject -groupId $groupIdentityResult.id
+                            $ruleId = $rules.Where({ $_.name -eq $ruleName }, 'First').id
+                            if($ruleId){
+                                Write-Host "Rule '$ruleName' already exists"
+                            }else{
+                                $rule = createEditRule -org $org.trim() -processId $processId -witRefName $witRefName -fieldId $fieldObject -groupId $groupIdentityResult.id -personalToken $personalToken
                             }
                         }
                     }
@@ -712,6 +732,34 @@ if ($witfields.isPresent) {
                             -type ($field.Type).trim() -personalToken $personalToken `
                             -listValues $fieldValues -defaultValue $defaultValue
                     }
+
+                    $rules = (getRules -org $org.trim() -processId $processId -witRefName $witRefName -personalToken $personalToken).value
+                        # Add rules
+                    $visibilityGroups = $field.Visibility
+                    if(![string]::IsNullOrEmpty($visibilityGroups))
+                    {
+                        $groupIdentityResult = getGroupIdentity -org $orgName -personalToken $personalToken -groupName $visibilityGroups.trim()
+                        $ruleName = generateRuleName -actionType $CONST_RULES_ACTION_TYPE_MAKE_HIDDEN -fieldId $fieldObject -groupId $groupIdentityResult.id
+                        $ruleId = $rules.Where({ $_.name -eq $ruleName }, 'First').id
+                        if($ruleId){
+                            deleteRule -org $org.trim() -processId $processId -witRefName $witRefName -ruleId $ruleId -personalToken $personalToken
+                        }
+                        $rule = createVisibilityRule -org $org.trim() -processId $processId -witRefName $witRefName -fieldId $fieldObject -groupId $groupIdentityResult.id -personalToken $personalToken
+                    }
+
+                    $readonlyGroups = $field.ReadOnly
+                    if(![string]::IsNullOrEmpty($readonlyGroups))
+                    {
+                        $groupIdentityResult = getGroupIdentity -org $orgName -personalToken $personalToken -groupName $visibilityGroups.trim()
+                        $ruleName = generateRuleName -actionType $CONST_RULES_ACTION_TYPE_READONLY -fieldId $fieldObject -groupId $groupIdentityResult.id
+                        $ruleId = $rules.Where({ $_.name -eq $ruleName }, 'First').id
+                        if($ruleId){
+                            deleteRule -org $org.trim() -processId $processId -witRefName $witRefName -ruleId $ruleId -personalToken $personalToken
+                        }
+
+                        $rule = createEditRule -org $org.trim() -processId $processId -witRefName $witRefName -fieldId $fieldObject -groupId $groupIdentityResult.id -personalToken $personalToken
+                    }
+
                     break
                 }
                 $CONST_DELETE_FIELD  {
